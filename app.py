@@ -1,9 +1,68 @@
 import gradio as gr
+from fastapi import FastAPI
 from app.env import EmailEnv
 from app.models import Action
 
+# ---------------- INIT ----------------
 env = EmailEnv()
+fastapi_app = FastAPI()
 
+# ---------------- FASTAPI ROUTES ----------------
+@fastapi_app.post("/reset")
+def reset():
+    obs = env.reset()
+    return {"observation": obs}
+
+
+@fastapi_app.post("/step")
+def step(action: Action):
+    obs, reward, done, info = env.step(action)
+
+    return {
+        "observation": obs,
+        "reward": reward.score if hasattr(reward, "score") else reward,
+        "done": done,
+        "info": info
+    }
+
+
+@fastapi_app.get("/state")
+def state():
+    return {"state": env.state()}
+
+
+@fastapi_app.post("/grader")
+def grader(action: Action):
+    current = env.state()
+
+    if current is None:
+        return {"error": "Call /reset first"}
+
+    actual = current["label"]
+
+    if action.label == actual:
+        score = 1.0
+    elif (action.label == "normal" and actual in ["spam", "urgent"]) or \
+         (actual == "normal" and action.label in ["spam", "urgent"]):
+        score = 0.5
+    else:
+        score = 0.2
+
+    return {"score": score}
+
+
+@fastapi_app.get("/baseline")
+def baseline():
+    env.reset()
+    action = Action(label="normal", action="ignore")
+    _, reward, _, _ = env.step(action)
+
+    return {
+        "baseline_score": reward.score if hasattr(reward, "score") else reward
+    }
+
+
+# ---------------- GRADIO UI ----------------
 def reset_env():
     return env.reset()
 
@@ -13,8 +72,7 @@ def get_state():
 
 
 def take_action(label, action):
-    result = env.step(Action(label=label, action=action))
-    return result
+    return env.step(Action(label=label, action=action))
 
 
 def grade_action(label, action):
@@ -24,7 +82,14 @@ def grade_action(label, action):
         return {"error": "Call reset first"}
 
     actual = current["label"]
-    score = 1.0 if label == actual else 0.0
+
+    if label == actual:
+        score = 1.0
+    elif (label == "normal" and actual in ["spam", "urgent"]) or \
+         (actual == "normal" and label in ["spam", "urgent"]):
+        score = 0.5
+    else:
+        score = 0.2
 
     return {"score": score}
 
@@ -33,28 +98,24 @@ def get_baseline():
     env.reset()
     action = Action(label="normal", action="ignore")
     _, reward, _, _ = env.step(action)
-    return {"baseline_score": reward.score}
+    return {"baseline_score": reward.score if hasattr(reward, "score") else reward}
 
 
 with gr.Blocks() as demo:
-
     gr.Markdown("# 🚀 OpenEnv Dashboard")
 
     gr.Markdown("""
     ## 📘 How to Use
-
     🔄 Reset → Initialize environment  
     📊 State → View current state  
     ⚡ Execute → Take action  
     🧠 Grade → Evaluate correctness  
     📈 Baseline → Compare performance  
-
     🎯 Goal: Maximize score by correct actions
     """)
 
     gr.Markdown("---")
 
-    # Controls
     with gr.Row():
         reset_btn = gr.Button("🔄 Reset")
         state_btn = gr.Button("📊 State")
@@ -89,4 +150,4 @@ with gr.Blocks() as demo:
     grade_btn.click(grade_action, inputs=[label, action], outputs=output)
 
 
-demo.launch(server_name="0.0.0.0", server_port=7860)
+app = gr.mount_gradio_app(fastapi_app, demo, path="/")
