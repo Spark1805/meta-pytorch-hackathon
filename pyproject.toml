@@ -1,0 +1,11 @@
+[project]
+name = "meta-pytorch-hackathon"
+version = "0.1.0"
+description = "Hackathon submission"
+authors = [
+    {name = "Pranav"}
+]
+dependencies = [
+    "fastapi",
+    "uvicorn"
+]
