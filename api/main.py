@@ -5,6 +5,15 @@ from app.models import Action
 app = FastAPI()
 env = EmailEnv()
 
+# ---------------- ROOT ----------------
+@app.get("/")
+@app.post("/")
+def root():
+    obs = env.reset()
+    return {
+        "observation": obs
+    }
+
 # ---------------- RESET ----------------
 @app.post("/reset")
 def reset():
