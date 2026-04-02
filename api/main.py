@@ -35,8 +35,13 @@ def grader(action: Action):
 
     if action.label == actual:
         score = 1.0
+
+    elif (action.label == "normal" and actual in ["spam", "urgent"]) or \
+         (actual == "normal" and action.label in ["spam", "urgent"]):
+        score = 0.5
+
     else:
-        score = 0.0
+        score = 0.2
 
     return {"score": score}
 
