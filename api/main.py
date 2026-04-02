@@ -5,18 +5,50 @@ from app.models import Action
 app = FastAPI()
 env = EmailEnv()
 
+# ---------------- RESET ----------------
 @app.post("/reset")
 def reset():
-    return env.reset()
+    obs = env.reset()
+    return {
+        "observation": obs
+    }
 
+# fallback
+@app.get("/reset")
+def reset_get():
+    obs = env.reset()
+    return {
+        "observation": obs
+    }
+
+
+# ---------------- STEP ----------------
 @app.post("/step")
 def step(action: Action):
-    return env.step(action)
+    obs, reward, done, info = env.step(action)
 
+    return {
+        "observation": obs,
+        "reward": reward.score if hasattr(reward, "score") else reward,
+        "done": done,
+        "info": info
+    }
+
+# fallback
+@app.get("/step")
+def step_get():
+    return {"error": "Use POST /step with JSON body"}
+
+
+# ---------------- STATE ----------------
 @app.get("/state")
 def state():
-    return env.state()
+    return {
+        "state": env.state()
+    }
 
+
+# ---------------- TASKS ----------------
 @app.get("/tasks")
 def tasks():
     return {
@@ -24,6 +56,8 @@ def tasks():
         "actions": ["spam", "normal", "urgent"]
     }
 
+
+# ---------------- GRADER ----------------
 @app.post("/grader")
 def grader(action: Action):
     current = env.state()
@@ -33,21 +67,27 @@ def grader(action: Action):
 
     actual = current["label"]
 
+    # strong match
     if action.label == actual:
         score = 1.0
-
+    # partially correct (close enough)
     elif (action.label == "normal" and actual in ["spam", "urgent"]) or \
          (actual == "normal" and action.label in ["spam", "urgent"]):
         score = 0.5
-
     else:
         score = 0.2
 
     return {"score": score}
 
+
+# ---------------- BASELINE ----------------
 @app.get("/baseline")
 def baseline():
-    obs = env.reset()
-    action = {"label": "normal", "action": "ignore"}
-    _, reward, _, _ = env.step(Action(**action))
-    return {"baseline_score": reward.score}
+    env.reset()
+
+    action = Action(label="normal", action="ignore")
+    _, reward, _, _ = env.step(action)
+
+    return {
+        "baseline_score": reward.score if hasattr(reward, "score") else reward
+    }
