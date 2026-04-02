@@ -1,73 +1,63 @@
 import gradio as gr
-import requests
+from app.env import EmailEnv
+from app.models import Action
 
-BASE_URL = "https://sparkgen0markvi-meta-pytorch-hackathon.hf.space"
-
-
-# ---------- API FUNCTIONS ----------
+env = EmailEnv()
 
 def reset_env():
-    res = requests.post(f"{BASE_URL}/reset")
-    return res.json()
+    return env.reset()
 
 
 def get_state():
-    res = requests.get(f"{BASE_URL}/state")
-    return res.json()
+    return env.state()
 
 
 def take_action(label, action):
-    payload = {"label": label, "action": action}
-    res = requests.post(f"{BASE_URL}/step", json=payload)
-    return res.json()
+    result = env.step(Action(label=label, action=action))
+    return result
 
 
 def grade_action(label, action):
-    payload = {"label": label, "action": action}
-    res = requests.post(f"{BASE_URL}/grader", json=payload)
-    return res.json()
+    current = env.state()
+
+    if current is None:
+        return {"error": "Call reset first"}
+
+    actual = current["label"]
+    score = 1.0 if label == actual else 0.0
+
+    return {"score": score}
 
 
 def get_baseline():
-    res = requests.get(f"{BASE_URL}/baseline")
-    return res.json()
+    env.reset()
+    action = Action(label="normal", action="ignore")
+    _, reward, _, _ = env.step(action)
+    return {"baseline_score": reward.score}
 
 
-# ---------- UI ----------
+with gr.Blocks() as demo:
 
-with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
+    gr.Markdown("# 🚀 OpenEnv Dashboard")
 
-    gr.Markdown("# 🚀 OpenEnv Dashboard (Dark Mode)")
-
-    # Guide Section
     gr.Markdown("""
     ## 📘 How to Use
 
-    🔄 **Step 1: Reset Environment**  
-    Start fresh by clicking **Reset**
+    🔄 Reset → Initialize environment  
+    📊 State → View current state  
+    ⚡ Execute → Take action  
+    🧠 Grade → Evaluate correctness  
+    📈 Baseline → Compare performance  
 
-    📊 **Step 2: Check State**  
-    View current situation of environment
-
-    ⚡ **Step 3: Take Action**
-    - Choose **Label** → spam / normal / urgent  
-    - Choose **Action** → ignore / process  
-    - Click **Execute**
-
-    📈 **Step 4: Evaluate**
-    - Use **Grade** to check correctness
-    - Compare with **Baseline**
-
-    🎯 **Goal:**  
-    Take correct actions → maximize score → beat baseline
+    🎯 Goal: Maximize score by correct actions
     """)
 
     gr.Markdown("---")
 
-    # Top Buttons
+    # Controls
     with gr.Row():
-        reset_btn = gr.Button("🔄 Reset Environment")
-        state_btn = gr.Button("📊 Get State")
+        reset_btn = gr.Button("🔄 Reset")
+        state_btn = gr.Button("📊 State")
         baseline_btn = gr.Button("📈 Baseline")
 
     output = gr.JSON(label="Output")
@@ -92,12 +82,11 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
         )
 
     with gr.Row():
-        action_btn = gr.Button("🚀 Execute Action")
-        grade_btn = gr.Button("🧠 Grade Action")
+        exec_btn = gr.Button("🚀 Execute")
+        grade_btn = gr.Button("🧠 Grade")
 
-    action_btn.click(take_action, inputs=[label, action], outputs=output)
+    exec_btn.click(take_action, inputs=[label, action], outputs=output)
     grade_btn.click(grade_action, inputs=[label, action], outputs=output)
 
 
-# Run app
-demo.launch()
+demo.launch(server_name="0.0.0.0", server_port=7860)
