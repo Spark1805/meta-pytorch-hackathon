@@ -5,7 +5,7 @@ from app.models import Action
 app = FastAPI()
 env = EmailEnv()
 
-@app.get("/reset")
+@app.post("/reset")
 def reset():
     return env.reset()
 
